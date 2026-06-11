@@ -111,19 +111,31 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       id: generateId(),
       zIndex: state.nextZIndex,
     };
+    const updatedElements = [...state.elements, newElement];
     set({
-      elements: [...state.elements, newElement],
+      elements: updatedElements,
       selectedElementId: newElement.id,
       nextZIndex: state.nextZIndex + 1,
+      outOfBoundsIds: computeOutOfBoundsIds(updatedElements, state.canvasWidth, state.canvasHeight),
     });
   },
 
   updateElement: (id, updates) => {
-    set((state) => ({
-      elements: state.elements.map((el) =>
-        el.id === id ? { ...el, ...updates } : el
-      ),
-    }));
+    const state = get();
+    const updatedElements = state.elements.map((el) =>
+      el.id === id ? { ...el, ...updates } : el
+    );
+    const shouldRecheck =
+      'x' in updates ||
+      'y' in updates ||
+      'width' in updates ||
+      'height' in updates;
+    set({
+      elements: updatedElements,
+      ...(shouldRecheck
+        ? { outOfBoundsIds: computeOutOfBoundsIds(updatedElements, state.canvasWidth, state.canvasHeight) }
+        : {}),
+    });
   },
 
   deleteElement: (id) => {
@@ -148,19 +160,25 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   moveElement: (id, x, y) => {
-    set((state) => ({
-      elements: state.elements.map((el) =>
-        el.id === id ? { ...el, x, y } : el
-      ),
-    }));
+    const state = get();
+    const updatedElements = state.elements.map((el) =>
+      el.id === id ? { ...el, x, y } : el
+    );
+    set({
+      elements: updatedElements,
+      outOfBoundsIds: computeOutOfBoundsIds(updatedElements, state.canvasWidth, state.canvasHeight),
+    });
   },
 
   resizeElement: (id, width, height) => {
-    set((state) => ({
-      elements: state.elements.map((el) =>
-        el.id === id ? { ...el, width, height } : el
-      ),
-    }));
+    const state = get();
+    const updatedElements = state.elements.map((el) =>
+      el.id === id ? { ...el, width, height } : el
+    );
+    set({
+      elements: updatedElements,
+      outOfBoundsIds: computeOutOfBoundsIds(updatedElements, state.canvasWidth, state.canvasHeight),
+    });
   },
 
   bringToFront: (id) => {
@@ -195,10 +213,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         y: element.y + 20,
         zIndex: state.nextZIndex,
       };
+      const updatedElements = [...state.elements, newElement];
       set({
-        elements: [...state.elements, newElement],
+        elements: updatedElements,
         selectedElementId: newElement.id,
         nextZIndex: state.nextZIndex + 1,
+        outOfBoundsIds: computeOutOfBoundsIds(updatedElements, state.canvasWidth, state.canvasHeight),
       });
     }
   },

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { BookOpen, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Sparkles, Grid3X3 } from 'lucide-react';
-import { useCanvasStore } from '@/store/canvasStore';
+import { useState, useEffect } from 'react';
+import { BookOpen, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Sparkles, Grid3X3, TriangleAlert, Move, Lock } from 'lucide-react';
+import { useCanvasStore, type ScaleMode } from '@/store/canvasStore';
 
 const sizePresets = [
   { name: 'A4竖版', width: 800, height: 1131 },
@@ -12,9 +12,47 @@ const sizePresets = [
 ];
 
 export default function Header() {
-  const { canvasWidth, canvasHeight, setCanvasSize, clearCanvas, currentTheme } = useCanvasStore();
+  const {
+    canvasWidth,
+    canvasHeight,
+    changeCanvasSize,
+    clearCanvas,
+    currentTheme,
+    scaleMode,
+    setScaleMode,
+    outOfBoundsIds,
+    resetAllOutOfBounds,
+  } = useCanvasStore();
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [customWidth, setCustomWidth] = useState(canvasWidth);
+  const [customHeight, setCustomHeight] = useState(canvasHeight);
+
+  useEffect(() => {
+    if (showSizeModal) {
+      setCustomWidth(canvasWidth);
+      setCustomHeight(canvasHeight);
+    }
+  }, [showSizeModal, canvasWidth, canvasHeight]);
+
+  const applyCustomSize = () => {
+    const w = Math.max(200, Math.min(4000, customWidth || 200));
+    const h = Math.max(200, Math.min(4000, customHeight || 200));
+    setCustomWidth(w);
+    setCustomHeight(h);
+    changeCanvasSize(w, h);
+  };
+
+  const handleCustomKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      applyCustomSize();
+    }
+  };
+
+  const modeOptions: { value: ScaleMode; label: string; desc: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { value: 'scale', label: '按比例缩放', desc: '元素位置和大小随画布等比调整', icon: Move },
+    { value: 'keep', label: '保持原位', desc: '元素位置和大小保持不变', icon: Lock },
+  ];
 
   return (
     <>
@@ -80,6 +118,46 @@ export default function Header() {
             {canvasWidth} × {canvasHeight}
           </button>
 
+          <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            <button
+              onClick={() => setScaleMode('scale')}
+              className={`flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors ${
+                scaleMode === 'scale'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="按比例缩放"
+            >
+              <Move className="h-3 w-3" />
+              缩放
+            </button>
+            <button
+              onClick={() => setScaleMode('keep')}
+              className={`flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors ${
+                scaleMode === 'keep'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="保持原位"
+            >
+              <Lock className="h-3 w-3" />
+              原位
+            </button>
+          </div>
+
+          {outOfBoundsIds.length > 0 && (
+            <button
+              onClick={resetAllOutOfBounds}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+              title={`${outOfBoundsIds.length}个元素超出画布边界，点击全部归位`}
+            >
+              <TriangleAlert className="h-3.5 w-3.5" />
+              {outOfBoundsIds.length}个越界
+            </button>
+          )}
+
+          <div className="mx-2 h-6 w-px bg-gray-200" />
+
           <button
             onClick={() => setShowClearModal(true)}
             className="flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs font-medium text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
@@ -97,7 +175,7 @@ export default function Header() {
           onClick={() => setShowSizeModal(false)}
         >
           <div
-            className="w-[420px] rounded-2xl bg-white p-5 shadow-2xl"
+            className="w-[460px] rounded-2xl bg-white p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -110,11 +188,51 @@ export default function Header() {
               </button>
             </div>
 
-            <div className="mb-5 grid grid-cols-3 gap-2">
+            <div className="mb-4 rounded-xl bg-blue-50/80 p-3">
+              <h4 className="mb-2 text-xs font-semibold text-blue-700">📐 缩放模式</h4>
+              <div className="grid grid-cols-2 gap-2">
+                {modeOptions.map((opt) => {
+                  const Icon = opt.icon;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setScaleMode(opt.value)}
+                      className={`flex flex-col items-center gap-1 rounded-lg border-2 p-2.5 transition-all ${
+                        scaleMode === opt.value
+                          ? 'border-blue-500 bg-white shadow-sm'
+                          : 'border-blue-100 bg-white/60 hover:border-blue-200'
+                      }`}
+                    >
+                      <div className={`flex items-center gap-1.5 ${scaleMode === opt.value ? 'text-blue-600' : 'text-gray-500'}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                        <span className="text-xs font-semibold">{opt.label}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400">{opt.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {outOfBoundsIds.length > 0 && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg bg-amber-100/80 px-3 py-2">
+                  <TriangleAlert className="h-3.5 w-3.5 text-amber-600" />
+                  <span className="text-[11px] text-amber-700">
+                    {outOfBoundsIds.length}个元素超出画布边界
+                  </span>
+                  <button
+                    onClick={resetAllOutOfBounds}
+                    className="ml-auto rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-amber-600"
+                  >
+                    全部归位
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-4 grid grid-cols-3 gap-2">
               {sizePresets.map((preset) => (
                 <button
                   key={preset.name}
-                  onClick={() => setCanvasSize(preset.width, preset.height)}
+                  onClick={() => changeCanvasSize(preset.width, preset.height)}
                   className={`flex flex-col items-center gap-1 rounded-xl border-2 p-3 transition-all ${
                     canvasWidth === preset.width && canvasHeight === preset.height
                       ? 'border-blue-500 bg-blue-50'
@@ -135,10 +253,12 @@ export default function Header() {
                   <label className="mb-1 block text-[11px] text-gray-500">宽度 (px)</label>
                   <input
                     type="number"
-                    value={canvasWidth}
+                    value={customWidth}
                     min={200}
                     max={4000}
-                    onChange={(e) => setCanvasSize(Number(e.target.value) || 200, canvasHeight)}
+                    onChange={(e) => setCustomWidth(Number(e.target.value) || 200)}
+                    onBlur={applyCustomSize}
+                    onKeyDown={handleCustomKeyDown}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
@@ -146,10 +266,12 @@ export default function Header() {
                   <label className="mb-1 block text-[11px] text-gray-500">高度 (px)</label>
                   <input
                     type="number"
-                    value={canvasHeight}
+                    value={customHeight}
                     min={200}
                     max={4000}
-                    onChange={(e) => setCanvasSize(canvasWidth, Number(e.target.value) || 200)}
+                    onChange={(e) => setCustomHeight(Number(e.target.value) || 200)}
+                    onBlur={applyCustomSize}
+                    onKeyDown={handleCustomKeyDown}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>

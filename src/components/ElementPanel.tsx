@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Calendar, StickyNote, Image, Ruler, Smile, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, StickyNote, Image, Ruler, Smile, ChevronDown, ChevronRight, TriangleAlert, LocateFixed, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '@/store/canvasStore';
 import { elementTemplates } from '@/data/elementTemplates';
-import type { ElementTemplate, ElementType } from '@/types';
+import type { ElementTemplate, ElementType, CanvasElement } from '@/types';
 
 const iconMap: Record<ElementType, React.ComponentType<{ className?: string }>> = {
   date: Calendar,
@@ -10,6 +10,14 @@ const iconMap: Record<ElementType, React.ComponentType<{ className?: string }>> 
   photo: Image,
   tape: Ruler,
   sticker: Smile,
+};
+
+const typeNameMap: Record<ElementType, string> = {
+  date: '日期',
+  sticky: '便签',
+  photo: '照片',
+  tape: '胶带',
+  sticker: '贴纸',
 };
 
 function VariantPreview({ template, variantIndex }: { template: ElementTemplate; variantIndex: number }) {
@@ -84,6 +92,68 @@ function VariantPreview({ template, variantIndex }: { template: ElementTemplate;
   );
 }
 
+function ElementListItem({ element, isOutOfBounds }: { element: CanvasElement; isOutOfBounds: boolean }) {
+  const { selectElement, deleteElement, resetOutOfBoundsElement, selectedElementId } = useCanvasStore();
+  const Icon = iconMap[element.type];
+  const isSelected = selectedElementId === element.id;
+
+  return (
+    <div
+      className={`group flex items-center gap-2 rounded-lg border px-2.5 py-2 transition-all cursor-pointer ${
+        isOutOfBounds
+          ? 'border-red-300 bg-red-50 hover:bg-red-100'
+          : isSelected
+            ? 'border-blue-300 bg-blue-50'
+            : 'border-gray-100 bg-white hover:bg-gray-50'
+      }`}
+      onClick={() => selectElement(element.id)}
+    >
+      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+        isOutOfBounds ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-500'
+      }`}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <span className={`truncate text-xs font-medium ${isOutOfBounds ? 'text-red-700' : 'text-gray-700'}`}>
+            {typeNameMap[element.type]}
+          </span>
+          {isOutOfBounds && (
+            <TriangleAlert className="h-3 w-3 shrink-0 text-red-400" />
+          )}
+        </div>
+        <span className="text-[10px] text-gray-400">
+          {Math.round(element.x)}, {Math.round(element.y)} · {Math.round(element.width)}×{Math.round(element.height)}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        {isOutOfBounds && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              resetOutOfBoundsElement(element.id);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-amber-500 transition-colors hover:bg-amber-100"
+            title="归位"
+          >
+            <LocateFixed className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteElement(element.id);
+          }}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-red-400 transition-colors hover:bg-red-50 hover:text-red-600"
+          title="删除"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ElementPanel() {
   const [expandedSections, setExpandedSections] = useState<Record<ElementType, boolean>>({
     date: true,
@@ -92,6 +162,11 @@ export default function ElementPanel() {
     tape: true,
     sticker: true,
   });
+  const [showElementList, setShowElementList] = useState(true);
+
+  const elements = useCanvasStore((s) => s.elements);
+  const outOfBoundsIds = useCanvasStore((s) => s.outOfBoundsIds);
+  const resetAllOutOfBounds = useCanvasStore((s) => s.resetAllOutOfBounds);
 
   const toggleSection = (type: ElementType) => {
     setExpandedSections((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -140,6 +215,60 @@ export default function ElementPanel() {
             </div>
           );
         })}
+
+        <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/50">
+          <button
+            onClick={() => setShowElementList(!showElementList)}
+            className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-gray-100/50"
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+                <span className="text-sm">📦</span>
+              </div>
+              <span className="text-sm font-semibold text-gray-700">画布元素</span>
+              <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                {elements.length}
+              </span>
+              {outOfBoundsIds.length > 0 && (
+                <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                  {outOfBoundsIds.length}越界
+                </span>
+              )}
+            </div>
+            {showElementList ? (
+              <ChevronDown className="h-4 w-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-gray-500" />
+            )}
+          </button>
+
+          {showElementList && (
+            <div className="space-y-1.5 p-2 pt-0">
+              {outOfBoundsIds.length > 0 && (
+                <button
+                  onClick={resetAllOutOfBounds}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+                >
+                  <LocateFixed className="h-3.5 w-3.5" />
+                  全部归位（{outOfBoundsIds.length}个越界元素）
+                </button>
+              )}
+              {elements.length === 0 ? (
+                <div className="py-4 text-center text-xs text-gray-400">
+                  暂无元素，从上方素材库添加
+                </div>
+              ) : (
+                elements.map((el) => (
+                  <ElementListItem
+                    key={el.id}
+                    element={el}
+                    isOutOfBounds={outOfBoundsIds.includes(el.id)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
